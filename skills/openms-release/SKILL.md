@@ -103,11 +103,15 @@ Patch release: continue with references/patch-release.md, steps 1–4, then Phas
    say so in the gate summary).
 2. Homebrew follows at 04:00 UTC; to save the wait:
    `gh workflow run nightly.yml -R OpenMS/homebrew-openms -f sha=$SHA -f force=true`.
-3. Testlab: `python3 $S/testlab_gate.py --sha $SHA --version X.Y.Z`. Exit 3 means a human
-   has to answer: either testlab.json is not configured (follow references/testlab.md: ask
-   once, fill it) or it is configured as `manual` (ask the user for the verdict on `SHA`).
-4. CI: `python3 $S/ci_status.py candidate --sha $SHA --wait 720` (release.yml alone takes
+3. CI: `python3 $S/ci_status.py candidate --sha $SHA --wait 720` (release.yml alone takes
    hours; prefer a scheduled wake-up over a blocking wait if your environment has one).
+4. Testlab, after CI: `python3 $S/testlab_gate.py --sha $SHA --version X.Y.Z`. It reuses the
+   openms-test-lab *Nightly readiness* run for `SHA` (a daily schedule starts one per nightly)
+   or dispatches one, which tests the installers and wheels the nightly of step 3 published
+   (about 3 h). Its verdict covers the automated blocking checks; the run's `gate.md` names the
+   judgement and human checks it leaves open — list them in the Phase 4 checkpoint
+   (references/testlab.md). Exit 3 means a human has to answer: testlab.json is not configured
+   (ask once, fill it) or is configured as `manual` (ask the user for the verdict on `SHA`).
 5. Content: `git worktree add ../cand $SHA` then
    `check_versions.py --repo-dir ../cand --expect X.Y.Z` and
    `changelog.py check --version X.Y.Z --file ../cand/CHANGELOG`.

@@ -178,6 +178,29 @@ def test_testlab() -> None:
           "testlab: unconfigured -> needs human")
     shutil.rmtree(tmp)
 
+    import testlab_gate
+    calls: list[str] = []
+    existing = dict(run_obj("nightly-readiness.yml", "main", rid=7), displayTitle=f"Nightly readiness · {SHA} · nightly")
+
+    def gh(args, check=True):
+        calls.append(" ".join(args))
+        return json.dumps([existing]) if args[:2] == ["run", "list"] else ""
+    _common.run_gh = gh
+    lab = {"configured": True, "kind": "github-workflow", "repo": "o/lab", "workflow": "nightly-readiness.yml",
+           "mode": "lookup-or-dispatch", "match_title": "{sha}", "inputs": {"openms_sha": "{sha}", "stage": "release"}}
+    ctx = {"sha": SHA, "version": "3.7.0", "tag": "v3.7.0", "nightly_date": "2026.10.11"}
+    code, _, url = testlab_gate.gh_workflow(lab, ctx, 0)
+    check(code == 0 and url == existing["url"] and not any(c.startswith("workflow run") for c in calls),
+          "testlab: lookup-or-dispatch reuses the run for the commit")
+    calls.clear()
+    sleep, testlab_gate.time.sleep = testlab_gate.time.sleep, lambda seconds: None
+    try:
+        code, _, _ = testlab_gate.gh_workflow(lab, dict(ctx, sha="b" * 40), 0)
+    finally:
+        testlab_gate.time.sleep = sleep
+    check(code == 2 and any(c.startswith("workflow run nightly-readiness.yml") and f"openms_sha={'b' * 40}" in c
+                            for c in calls), "testlab: lookup-or-dispatch starts a run when none exists")
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
