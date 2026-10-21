@@ -4,7 +4,8 @@
 The testlab is configured in ../testlab.json (see references/testlab.md). Kinds:
 
   github-workflow  dispatch (mode "dispatch") or look up (mode "lookup") a workflow run
-                   in another repository; pass == conclusion "success".
+                   in another repository, or look one up and dispatch only when none exists
+                   (mode "lookup-or-dispatch", needs match_title); pass == conclusion "success".
   command          run a local command template; pass == exit code 0.
   manual           print what a person has to check; always exit 3.
 
@@ -38,23 +39,33 @@ def fill(template: str, ctx: dict, quote: bool = False) -> str:
     return template.format(**vals)
 
 
+def matching_runs(cfg: dict, ctx: dict, created_after: str | None = None) -> list[dict]:
+    """Recent runs of the workflow, newest first, whose title contains match_title (e.g. "{sha}")."""
+    runs = _common.gh_json(["run", "list", "-R", cfg["repo"], "--workflow", cfg["workflow"], "--limit", "30",
+                            "--json", FIELDS]) or []
+    if created_after:
+        runs = [r for r in runs if r["createdAt"] >= created_after]
+    if cfg.get("match_title"):
+        runs = [r for r in runs if fill(cfg["match_title"], ctx) in (r.get("displayTitle") or "")]
+    return runs
+
+
 def gh_workflow(cfg: dict, ctx: dict, wait_min: int) -> tuple[int, str, str | None]:
     repo, wf, ref = cfg["repo"], cfg["workflow"], cfg.get("ref", "main")
-    started = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=30)
-    if cfg.get("mode", "dispatch") == "dispatch":
+    started = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    mode = cfg.get("mode", "dispatch")
+    if mode == "lookup-or-dispatch":
+        # A run for this candidate (e.g. one a schedule started overnight) is reused; else start one.
+        mode = "lookup" if cfg.get("match_title") and matching_runs(cfg, ctx) else "dispatch"
+    if mode == "dispatch":
         args = ["workflow", "run", wf, "-R", repo, "--ref", ref]
         for k, v in (cfg.get("inputs") or {}).items():
             args += ["-f", f"{k}={fill(str(v), ctx)}"]
         _common.run_gh(args)
         time.sleep(15)
-    match = cfg.get("match_title")  # optional: substring the run title must contain, e.g. "{sha}"
     deadline = time.time() + wait_min * 60
     while True:
-        runs = _common.gh_json(["run", "list", "-R", repo, "--workflow", wf, "--limit", "30", "--json", FIELDS]) or []
-        if cfg.get("mode", "dispatch") == "dispatch":
-            runs = [r for r in runs if r["createdAt"] >= started.strftime("%Y-%m-%dT%H:%M:%SZ")]
-        if match:
-            runs = [r for r in runs if fill(match, ctx) in (r.get("displayTitle") or "")]
+        runs = matching_runs(cfg, ctx, started if mode == "dispatch" else None)
         run = runs[0] if runs else None
         if run and run["status"] == "completed":
             ok = run["conclusion"] == "success"

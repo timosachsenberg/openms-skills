@@ -2,7 +2,7 @@
 
 A patch release is cut from `releases/vX.Y.0`, not from develop, so the nightly does not
 test it. The gates are therefore: `test.yml` and the wheel workflow dispatched on the branch,
-the testlab on the branch head, and the version/CHANGELOG checks.
+the testlab labs on the branch's wheels, and the version/CHANGELOG checks.
 
 ## 1. Freeze the weekly job, then the release branch
 
@@ -53,9 +53,24 @@ Then merge the PR (`gh pr merge --squash`; branch protection may require a revie
 SHA=$(git ls-remote origin refs/heads/releases/vX.Y.0 | cut -f1)
 gh workflow run test.yml -R OpenMS/OpenMS --ref releases/vX.Y.0
 gh workflow run pyopenms-wheels-cibuildwheel.yml -R OpenMS/OpenMS --ref releases/vX.Y.0   # upload-to-pypi stays false
-python3 <skill>/scripts/testlab_gate.py --sha $SHA --version X.Y.Z+1
 python3 <skill>/scripts/ci_status.py branch --ref releases/vX.Y.0 --sha $SHA --wait 360
 ```
+
+Testlab: do not run `testlab_gate.py` here. Its *Nightly readiness* workflow tests nightlies
+only and refuses a branch commit ("not a nightly"). Once the wheel run above is green, dispatch
+the package labs of `timosachsenberg/openms-test-lab` on its wheels, then ask the user for
+the verdict on `SHA`:
+
+```bash
+for r in ubuntu-24.04 ubuntu-24.04-arm; do
+  gh workflow run linux-lab.yml -R timosachsenberg/openms-test-lab -f runner=$r -f python_version=3.12 \
+    -f wheel_run_id=<wheel run id> -f openms_package=none -f debug=false
+done
+gh workflow run macos-lab.yml -R timosachsenberg/openms-test-lab -f runner=macos-15 -f python_version=3.12 \
+  -f wheel_run_id=<wheel run id> -f openms_package=none -f debug=false
+```
+
+The Windows lab takes no run ID; the Windows wheel is covered by the wheel workflow's own tests.
 
 The wheel dispatch uploads to the archive's `experimental/releases_vX.Y.0` folder; harmless.
 Installers are not rehearsed for a patch (no nightly on the branch); packaging is rarely

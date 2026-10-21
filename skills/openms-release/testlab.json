@@ -1,18 +1,18 @@
 {
-  "configured": false,
+  "configured": true,
   "kind": "github-workflow",
-  "repo": "OWNER/REPO",
-  "workflow": "testlab.yml",
+  "repo": "timosachsenberg/openms-test-lab",
+  "workflow": "nightly-readiness.yml",
   "ref": "main",
-  "mode": "dispatch",
+  "mode": "lookup-or-dispatch",
   "inputs": {
     "openms_sha": "{sha}",
-    "openms_version": "{version}"
+    "stage": "release"
   },
-  "match_title": null,
-  "timeout_minutes": 360,
-  "poll_seconds": 300,
+  "match_title": "{sha}",
+  "timeout_minutes": 300,
+  "poll_seconds": 600,
   "report_url": null,
   "command": null,
-  "instructions": "Check the testlab result for OpenMS {sha} ({version}) and report pass or fail."
+  "instructions": "Read gate.md of the Nightly readiness run for OpenMS {sha} ({version}) and report pass or fail, with the checks it left open."
 }
