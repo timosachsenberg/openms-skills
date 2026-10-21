@@ -1,0 +1,18 @@
+{
+  "configured": false,
+  "kind": "github-workflow",
+  "repo": "OWNER/REPO",
+  "workflow": "testlab.yml",
+  "ref": "main",
+  "mode": "dispatch",
+  "inputs": {
+    "openms_sha": "{sha}",
+    "openms_version": "{version}"
+  },
+  "match_title": null,
+  "timeout_minutes": 360,
+  "poll_seconds": 300,
+  "report_url": null,
+  "command": null,
+  "instructions": "Check the testlab result for OpenMS {sha} ({version}) and report pass or fail."
+}
